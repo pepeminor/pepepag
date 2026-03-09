@@ -7,6 +7,7 @@ const COINGECKO_IDS: Record<string, string> = {
   USDC: "usd-coin",
   USDT: "tether",
   WETH: "ethereum",
+  PEPE: "pepe",
   ARB: "arbitrum",
 };
 

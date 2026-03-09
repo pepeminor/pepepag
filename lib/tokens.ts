@@ -42,6 +42,15 @@ export const TOKENS: TokenInfo[] = [
     logoUrl: "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=040",
   },
   {
+    symbol: "PEPE",
+    name: "Pepe",
+    decimals: 18,
+    addresses: {
+      [ETHEREUM_CHAIN_ID]: "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+    },
+    logoUrl: "https://cryptologos.cc/logos/pepe-pepe-logo.png?v=040",
+  },
+  {
     symbol: "ARB",
     name: "Arbitrum",
     decimals: 18,

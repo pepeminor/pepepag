@@ -1,50 +1,34 @@
 "use client";
 
 import { Box, Typography, Skeleton, Avatar, Stack } from "@mui/material";
-import { useAccount, useReadContracts } from "wagmi";
-import { formatUnits } from "viem";
-import { TOKENS, ERC20_ABI } from "@/lib/tokens";
+import { useAccount } from "wagmi";
+import { TOKENS } from "@/lib/tokens";
 import { type Prices, formatUsd } from "@/lib/usePrices";
+import type { AllBalances } from "@/lib/useAllBalances";
 
 interface TokenListProps {
   prices: Prices;
+  tokenBalances: AllBalances;
+  loading: boolean;
   onTotalUsd?: (total: number) => void;
 }
 
-export default function TokenList({ prices, onTotalUsd }: TokenListProps) {
-  const { address, chain } = useAccount();
+export default function TokenList({ prices, tokenBalances, loading, onTotalUsd }: TokenListProps) {
+  const { chain } = useAccount();
   const chainId = chain?.id;
 
-  const contracts = TOKENS
-    .filter((t) => chainId && t.addresses[chainId])
-    .map((t) => ({
-      address: t.addresses[chainId!],
-      abi: ERC20_ABI,
-      functionName: "balanceOf" as const,
-      args: [address!],
-    }));
-
-  const { data, isLoading } = useReadContracts({
-    contracts,
-    query: { enabled: !!address && !!chainId },
-  });
-
   const tokensOnChain = TOKENS.filter((t) => chainId && t.addresses[chainId]);
+  const balances = chainId ? tokenBalances[chainId] || {} : {};
 
-  // Calculate total USD for tokens and report up
   let tokenTotalUsd = 0;
-  const tokenValues = tokensOnChain.map((token, i) => {
-    const result = data?.[i];
-    const rawBalance = result?.status === "success" ? (result.result as bigint) : 0n;
-    const formatted = Number(formatUnits(rawBalance, token.decimals));
+  const tokenValues = tokensOnChain.map((token) => {
+    const formatted = balances[token.symbol] || 0;
     const usdValue = formatted * (prices[token.symbol] || 0);
     tokenTotalUsd += usdValue;
     return { token, formatted, usdValue };
   });
 
-  // Report total to parent (non-blocking)
-  if (onTotalUsd && !isLoading && data) {
-    // Use queueMicrotask to avoid setState during render warning
+  if (onTotalUsd && !loading) {
     queueMicrotask(() => onTotalUsd(tokenTotalUsd));
   }
 
@@ -83,7 +67,7 @@ export default function TokenList({ prices, onTotalUsd }: TokenListProps) {
 
           <Box textAlign="right">
             <Typography variant="body2" fontWeight={600} fontFamily="monospace">
-              {isLoading ? (
+              {loading ? (
                 <Skeleton width={60} />
               ) : formatted > 0 ? (
                 formatted < 0.0001 ? "<0.0001" : formatted.toFixed(4)
@@ -92,7 +76,7 @@ export default function TokenList({ prices, onTotalUsd }: TokenListProps) {
               )}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {isLoading ? (
+              {loading ? (
                 <Skeleton width={40} />
               ) : usdValue > 0 ? (
                 formatUsd(usdValue)

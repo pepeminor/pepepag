@@ -8,7 +8,7 @@ export const chainConfigs = [
     chainNamespace: CHAIN_NAMESPACES.EIP155,
     chainId: "0x1",
     rpcTarget:
-      process.env.NEXT_PUBLIC_ETH_RPC_URL || "https://eth.llamarpc.com",
+      process.env.NEXT_PUBLIC_ETH_RPC_URL || "https://cloudflare-eth.com",
     displayName: "Ethereum Mainnet",
     blockExplorerUrl: "https://etherscan.io",
     ticker: "ETH",

@@ -22,10 +22,11 @@ import CallReceivedIcon from "@mui/icons-material/CallReceived";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
 import { useWeb3AuthConnect, useWeb3AuthDisconnect, useWeb3AuthUser } from "@web3auth/modal/react";
-import { useAccount, useDisconnect, useBalance } from "wagmi";
-import { formatUnits } from "viem";
+import { useAccount, useDisconnect } from "wagmi";
 import { useThemeMode } from "@/lib/ThemeContext";
 import { usePrices, formatUsd } from "@/lib/usePrices";
+import { useAllBalances } from "@/lib/useAllBalances";
+import { ARBITRUM_CHAIN_ID } from "@/lib/tokens";
 import ChainSwitcher from "@/components/wallet/ChainSwitcher";
 import TokenList from "@/components/wallet/TokenList";
 import SendModal, { type SendPrefill } from "@/components/wallet/SendModal";
@@ -42,10 +43,15 @@ export default function DashboardPage() {
   const { isConnected: isWeb3AuthConnected } = useWeb3AuthConnect();
   const { disconnect: disconnectWeb3Auth } = useWeb3AuthDisconnect();
   const { userInfo } = useWeb3AuthUser();
-  const { address, isConnected: isWagmiConnected } = useAccount();
+  const { address, isConnected: isWagmiConnected, chain } = useAccount();
   const { disconnect: disconnectWagmi } = useDisconnect();
-  const { data: balance, isLoading: balanceLoading, refetch: refetchBalance } = useBalance({ address });
   const { prices, loading: pricesLoading, canRefresh, fetchPrices } = usePrices();
+  const {
+    ethBalances,
+    tokenBalances,
+    loading: balancesLoading,
+    refetch: refetchBalances,
+  } = useAllBalances(address);
 
   const [sendOpen, setSendOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
@@ -54,6 +60,7 @@ export default function DashboardPage() {
   const [tokenTotalUsd, setTokenTotalUsd] = useState(0);
 
   const isConnected = isWeb3AuthConnected || isWagmiConnected;
+  const chainId = chain?.id || ARBITRUM_CHAIN_ID;
 
   useEffect(() => {
     if (!isConnected) {
@@ -78,7 +85,7 @@ export default function DashboardPage() {
   const handleRefresh = () => {
     if (!canRefresh) return;
     fetchPrices();
-    refetchBalance();
+    refetchBalances();
   };
 
   const handleScanResult = useCallback((data: { address: string; token?: string; amount?: string }) => {
@@ -104,9 +111,18 @@ export default function DashboardPage() {
   }
 
   const displayName = userInfo?.name || userInfo?.email || shortenAddress(address);
-  const ethBalance = Number(formatUnits(balance?.value ?? 0n, balance?.decimals ?? 18));
+
+  // Current chain ETH balance
+  const ethBalance = ethBalances[chainId] || 0;
   const ethUsd = ethBalance * (prices["ETH"] || 0);
-  const totalUsd = ethUsd + tokenTotalUsd;
+
+  // Total USD for current chain only
+  let chainTokenUsd = 0;
+  const bals = tokenBalances[chainId] || {};
+  for (const [symbol, amount] of Object.entries(bals)) {
+    chainTokenUsd += amount * (prices[symbol] || 0);
+  }
+  const totalUsd = ethUsd + chainTokenUsd;
 
   return (
     <Box minHeight="100vh" px={2} py={2} pb={12} maxWidth={480} mx="auto">
@@ -153,16 +169,17 @@ export default function DashboardPage() {
           </Box>
         </Box>
 
-        {/* Total USD balance */}
+        {/* Total USD balance (all chains combined) */}
         <Typography variant="h3" fontWeight={800} letterSpacing={-1}>
-          {balanceLoading || pricesLoading ? (
+          {balancesLoading && pricesLoading ? (
             <CircularProgress size={28} />
           ) : (
             formatUsd(totalUsd)
           )}
         </Typography>
         <Typography variant="body2" color="text.secondary" mt={0.3}>
-          {balanceLoading ? "" : `${ethBalance.toFixed(4)} ETH`}
+          {`${ethBalance.toFixed(4)} ETH`}
+          {ethUsd > 0 && ` ≈ ${formatUsd(ethUsd)}`}
         </Typography>
 
         {/* Send / Receive buttons */}
@@ -218,7 +235,12 @@ export default function DashboardPage() {
             </span>
           </Tooltip>
         </Box>
-        <TokenList prices={prices} onTotalUsd={setTokenTotalUsd} />
+        <TokenList
+          prices={prices}
+          tokenBalances={tokenBalances}
+          loading={balancesLoading}
+          onTotalUsd={setTokenTotalUsd}
+        />
       </Paper>
 
       {/* Placeholder for AI chat — Step 4 */}
