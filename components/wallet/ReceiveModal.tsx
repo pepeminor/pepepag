@@ -108,19 +108,19 @@ export default function ReceiveModal({ open, onClose, tokenInfo }: ReceiveModalP
               sx={{
                 width: 200,
                 height: 200,
-                borderRadius: 3,
+                borderRadius: "12px",
                 bgcolor: "#fff",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                p: 2,
+                p: 1,
               }}
             >
               <Box
                 component="img"
                 src={qrUrl}
                 alt="QR Code"
-                sx={{ width: 180, height: 180 }}
+                sx={{ width: 184, height: 184 }}
               />
             </Box>
 
