@@ -70,10 +70,28 @@ export default function QrScannerModal({ open, onClose, onScan }: QrScannerModal
   const html5QrRef = useRef<import("html5-qrcode").Html5Qrcode | null>(null);
   const [error, setError] = useState("");
   const processedRef = useRef(false);
+  const stoppedRef = useRef(false);
+
+  const safeStop = async () => {
+    const scanner = html5QrRef.current;
+    if (!scanner || stoppedRef.current) return;
+    stoppedRef.current = true;
+    try {
+      const state = scanner.getState();
+      // Only stop if scanning or paused (states 2 and 3)
+      if (state === 2 || state === 3) {
+        await scanner.stop();
+      }
+    } catch {
+      // ignore — already stopped
+    }
+    html5QrRef.current = null;
+  };
 
   useEffect(() => {
     if (!open) {
       processedRef.current = false;
+      stoppedRef.current = false;
       return;
     }
 
@@ -85,11 +103,11 @@ export default function QrScannerModal({ open, onClose, onScan }: QrScannerModal
         if (!mounted || !scannerRef.current) return;
 
         const scannerId = "qr-reader";
-        // Ensure container has the id
         scannerRef.current.id = scannerId;
 
         const scanner = new Html5Qrcode(scannerId);
         html5QrRef.current = scanner;
+        stoppedRef.current = false;
 
         await scanner.start(
           { facingMode: "environment" },
@@ -99,14 +117,14 @@ export default function QrScannerModal({ open, onClose, onScan }: QrScannerModal
             const parsed = parseQrData(decodedText);
             if (parsed) {
               processedRef.current = true;
-              scanner.stop().catch(() => {});
+              safeStop();
               onScan(parsed);
               onClose();
             } else {
               setError("Invalid QR code — expected a wallet address");
             }
           },
-          () => {} // ignore scan failures (camera noise)
+          () => {}
         );
       } catch (err) {
         if (mounted) {
@@ -119,16 +137,12 @@ export default function QrScannerModal({ open, onClose, onScan }: QrScannerModal
       }
     };
 
-    // Small delay to let the dialog mount
     const timeout = setTimeout(startScanner, 300);
 
     return () => {
       mounted = false;
       clearTimeout(timeout);
-      if (html5QrRef.current) {
-        html5QrRef.current.stop().catch(() => {});
-        html5QrRef.current = null;
-      }
+      safeStop();
     };
   }, [open, onClose, onScan]);
 
