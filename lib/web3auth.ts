@@ -33,6 +33,6 @@ export const web3AuthContextConfig: Web3AuthContextConfig = {
     clientId,
     chains: chainConfigs,
     defaultChainId: "0xa4b1",
-    web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
+    web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET,
   },
 };
