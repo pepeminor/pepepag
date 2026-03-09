@@ -34,11 +34,5 @@ export const web3AuthContextConfig: Web3AuthContextConfig = {
     chains: chainConfigs,
     defaultChainId: "0xa4b1",
     web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET,
-    uiConfig: {
-      appName: "PepePag",
-      mode: "dark",
-      loginMethodsOrder: ["google", "apple", "twitter"],
-      primaryButton: "socialLogin",
-    },
   },
 };
