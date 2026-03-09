@@ -15,32 +15,72 @@ import CloseIcon from "@mui/icons-material/Close";
 interface QrScannerModalProps {
   open: boolean;
   onClose: () => void;
-  onScan: (data: { address: string; token?: string; amount?: string }) => void;
+  onScan: (data: { address: string; token?: string; amount?: string; chainId?: number }) => void;
+}
+
+import { TOKENS, NATIVE_ETH_ADDRESS } from "@/lib/tokens";
+
+// Resolve token symbol from contract address
+function resolveTokenSymbol(contractAddress: string): string | undefined {
+  const lower = contractAddress.toLowerCase();
+  for (const t of TOKENS) {
+    for (const addr of Object.values(t.addresses)) {
+      if (addr.toLowerCase() === lower && addr !== NATIVE_ETH_ADDRESS) {
+        return t.symbol;
+      }
+    }
+  }
+  return undefined;
+}
+
+type ParsedQr = { address: string; token?: string; amount?: string; chainId?: number };
+
+// Extract @chainId from path part, e.g. "0xABC@42161" → 42161
+function extractChainId(pathPart: string): number | undefined {
+  const match = pathPart.match(/@(\d+)/);
+  return match ? Number(match[1]) : undefined;
 }
 
 // Parse EIP-681 (ethereum:0x...?value=...&token=...) or plain address
-function parseQrData(raw: string): { address: string; token?: string; amount?: string } | null {
+function parseQrData(raw: string): ParsedQr | null {
   const trimmed = raw.trim();
 
-  // EIP-681: ethereum:0xAddress@chainId/transfer?address=0x...&uint256=...
-  // or simpler: ethereum:0xAddress?value=...
+  // EIP-681: ethereum:0xTokenContract@chainId/transfer?address=0xReceiver&uint256=...
+  // or simpler: ethereum:0xAddress@chainId?value=...
   if (trimmed.startsWith("ethereum:")) {
     const withoutPrefix = trimmed.slice(9);
     const [pathPart, queryPart] = withoutPrefix.split("?");
-    // Extract address (may have @chainId or /function)
+    const params = new URLSearchParams(queryPart || "");
+    const parsedChainId = extractChainId(pathPart);
+
+    // Check for /transfer pattern (ERC20 receive QR)
+    // Format: 0xTokenContract@chainId/transfer?address=0xReceiver
+    const transferMatch = pathPart.match(/^(0x[a-fA-F0-9]{40})(@\d+)?\/transfer$/);
+    if (transferMatch) {
+      const receiverAddress = params.get("address");
+      if (receiverAddress) {
+        return {
+          address: receiverAddress,
+          token: resolveTokenSymbol(transferMatch[1]),
+          amount: params.get("uint256") || params.get("amount") || undefined,
+          chainId: parsedChainId,
+        };
+      }
+    }
+
+    // Simple format: ethereum:0xAddress@chainId
     const addressMatch = pathPart.match(/^(0x[a-fA-F0-9]{40})/);
     if (!addressMatch) return null;
 
-    const params = new URLSearchParams(queryPart || "");
     return {
       address: addressMatch[1],
       amount: params.get("value") || params.get("amount") || undefined,
       token: params.get("token") || undefined,
+      chainId: parsedChainId,
     };
   }
 
   // Binance-style or plain address with possible query params
-  // e.g. "bnb:0xAddress?amount=100&token=USDT"
   const colonIdx = trimmed.indexOf(":");
   if (colonIdx > 0 && colonIdx < 10) {
     const afterColon = trimmed.slice(colonIdx + 1);

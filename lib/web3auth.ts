@@ -9,7 +9,7 @@ export const chainConfigs = [
     chainId: "0x1",
     rpcTarget:
       process.env.NEXT_PUBLIC_ETH_RPC_URL || "https://1rpc.io/eth",
-    displayName: "Ethereum Mainnet",
+    displayName: "Ethereum",
     blockExplorerUrl: "https://etherscan.io",
     ticker: "ETH",
     tickerName: "Ethereum",

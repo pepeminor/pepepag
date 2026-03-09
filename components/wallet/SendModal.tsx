@@ -14,6 +14,9 @@ import {
   Select,
   CircularProgress,
   Alert,
+  Avatar,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
@@ -25,7 +28,7 @@ import {
   useWaitForTransactionReceipt,
 } from "wagmi";
 import { parseUnits, formatUnits, isAddress } from "viem";
-import { TOKENS, ERC20_ABI } from "@/lib/tokens";
+import { TOKENS, ERC20_ABI, NATIVE_ETH_ADDRESS } from "@/lib/tokens";
 
 export interface SendPrefill {
   address?: string;
@@ -87,12 +90,9 @@ export default function SendModal({ open, onClose, prefill }: SendModalProps) {
   const sendError = ethError || erc20Error;
 
   const tokenInfo = TOKENS.find((t) => t.symbol === selectedToken);
-  const isETH = selectedToken === "ETH";
+  const isETH = !tokenInfo || (chainId ? tokenInfo.addresses[chainId] === NATIVE_ETH_ADDRESS : selectedToken === "ETH");
 
-  const tokensForChain = [
-    { symbol: "ETH", name: "Ethereum", decimals: 18 },
-    ...TOKENS.filter((t) => chainId && t.addresses[chainId]),
-  ];
+  const tokensForChain = TOKENS.filter((t) => chainId && t.addresses[chainId]);
 
   const isValidAddress = toAddress === "" || isAddress(toAddress);
   const isValidAmount = amount === "" || (!isNaN(Number(amount)) && Number(amount) > 0);
@@ -159,10 +159,25 @@ export default function SendModal({ open, onClose, prefill }: SendModalProps) {
         onChange={handleTokenChange}
         size="small"
         sx={{ borderRadius: 2 }}
+        renderValue={(value) => {
+          const t = tokensForChain.find((tk) => tk.symbol === value);
+          return (
+            <Box display="flex" alignItems="center" gap={1}>
+              <Avatar src={t?.logoUrl} alt={t?.symbol} sx={{ width: 22, height: 22 }} />
+              <span>{t?.symbol} — {t?.name}</span>
+            </Box>
+          );
+        }}
       >
         {tokensForChain.map((t) => (
           <MenuItem key={t.symbol} value={t.symbol}>
-            {t.symbol} — {t.name}
+            <ListItemIcon sx={{ minWidth: 32 }}>
+              <Avatar src={t.logoUrl} alt={t.symbol} sx={{ width: 24, height: 24 }} />
+            </ListItemIcon>
+            <ListItemText
+              primary={`${t.symbol} — ${t.name}`}
+              primaryTypographyProps={{ fontSize: 14 }}
+            />
           </MenuItem>
         ))}
       </Select>

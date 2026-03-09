@@ -2,7 +2,7 @@
 
 import { Box, Typography, Skeleton, Avatar, Stack } from "@mui/material";
 import { useAccount } from "wagmi";
-import { TOKENS } from "@/lib/tokens";
+import { TOKENS, type TokenInfo } from "@/lib/tokens";
 import { type Prices, formatUsd } from "@/lib/usePrices";
 import type { AllBalances } from "@/lib/useAllBalances";
 
@@ -11,9 +11,10 @@ interface TokenListProps {
   tokenBalances: AllBalances;
   loading: boolean;
   onTotalUsd?: (total: number) => void;
+  onTokenClick?: (token: TokenInfo) => void;
 }
 
-export default function TokenList({ prices, tokenBalances, loading, onTotalUsd }: TokenListProps) {
+export default function TokenList({ prices, tokenBalances, loading, onTotalUsd, onTokenClick }: TokenListProps) {
   const { chain } = useAccount();
   const chainId = chain?.id;
 
@@ -42,11 +43,12 @@ export default function TokenList({ prices, tokenBalances, loading, onTotalUsd }
           justifyContent="space-between"
           py={1.5}
           px={0.5}
+          onClick={() => onTokenClick?.(token)}
           sx={{
-            borderBottom: (t) =>
-              i < tokenValues.length - 1
-                ? `1px solid ${t.palette.divider}`
-                : "none",
+            cursor: onTokenClick ? "pointer" : "default",
+            borderRadius: 2,
+            transition: "background 0.15s",
+            "&:hover": onTokenClick ? { bgcolor: "action.hover" } : {},
           }}
         >
           <Box display="flex" alignItems="center" gap={1.5}>

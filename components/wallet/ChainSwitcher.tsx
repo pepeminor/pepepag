@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import {
+  Avatar,
   Box,
   MenuItem,
   Select,
@@ -14,8 +15,8 @@ import { useSwitchChain } from "@web3auth/modal/react";
 import { useAccount, useSwitchChain as useWagmiSwitchChain } from "wagmi";
 
 const CHAINS = [
-  { chainId: "0x1", numericId: 1, label: "Ethereum", color: "#627EEA", icon: "⟠" },
-  { chainId: "0xa4b1", numericId: 42161, label: "Arbitrum", color: "#28A0F0", icon: "🔵" },
+  { chainId: "0x1", numericId: 1, label: "Ethereum", icon: "/tokens/eth.png" },
+  { chainId: "0xa4b1", numericId: 42161, label: "Arbitrum", icon: "/tokens/arb.png" },
 ];
 
 export default function ChainSwitcher() {
@@ -88,7 +89,7 @@ export default function ChainSwitcher() {
         const c = CHAINS.find((ch) => ch.chainId === value);
         return (
           <Box display="flex" alignItems="center" gap={0.8}>
-            {switching ? <CircularProgress size={14} /> : <span>{c?.icon}</span>}
+            {switching ? <CircularProgress size={14} /> : <Avatar src={c?.icon} alt={c?.label} sx={{ width: 18, height: 18 }} />}
             {c?.label}
           </Box>
         );
@@ -96,7 +97,9 @@ export default function ChainSwitcher() {
     >
       {CHAINS.map((c) => (
         <MenuItem key={c.chainId} value={c.chainId}>
-          <ListItemIcon sx={{ minWidth: 28, fontSize: 16 }}>{c.icon}</ListItemIcon>
+          <ListItemIcon sx={{ minWidth: 28 }}>
+            <Avatar src={c.icon} alt={c.label} sx={{ width: 20, height: 20 }} />
+          </ListItemIcon>
           <ListItemText
             primary={c.label}
             primaryTypographyProps={{ fontSize: 14, fontWeight: 600 }}

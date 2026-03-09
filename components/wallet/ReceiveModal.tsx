@@ -10,19 +10,61 @@ import {
   IconButton,
   Button,
   Snackbar,
+  Avatar,
+  Chip,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useAccount } from "wagmi";
+import { type TokenInfo, NATIVE_ETH_ADDRESS } from "@/lib/tokens";
+
+export interface ReceiveTokenInfo {
+  token: TokenInfo;
+  chainId: number;
+  chainName: string;
+}
 
 interface ReceiveModalProps {
   open: boolean;
   onClose: () => void;
+  tokenInfo?: ReceiveTokenInfo | null;
 }
 
-export default function ReceiveModal({ open, onClose }: ReceiveModalProps) {
+/**
+ * Build EIP-681 URI for QR code
+ * - Native ETH: ethereum:0xMyAddress@chainId
+ * - ERC20 token: ethereum:0xTokenContract@chainId/transfer?address=0xMyAddress
+ */
+function buildEip681Uri(
+  walletAddress: string,
+  tokenInfo?: ReceiveTokenInfo | null
+): string {
+  if (!tokenInfo) {
+    // Generic — just the address
+    return walletAddress;
+  }
+
+  const { token, chainId } = tokenInfo;
+  const tokenAddress = token.addresses[chainId];
+
+  if (!tokenAddress || tokenAddress === NATIVE_ETH_ADDRESS) {
+    // Native ETH
+    return `ethereum:${walletAddress}@${chainId}`;
+  }
+
+  // ERC20 transfer: ethereum:0xTokenContract@chainId/transfer?address=0xMyAddress
+  return `ethereum:${tokenAddress}@${chainId}/transfer?address=${walletAddress}`;
+}
+
+export default function ReceiveModal({ open, onClose, tokenInfo }: ReceiveModalProps) {
   const { address, chain } = useAccount();
   const [copied, setCopied] = useState(false);
+
+  const qrData = buildEip681Uri(address || "", tokenInfo);
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}`;
+
+  const displayChainName = tokenInfo?.chainName || chain?.name || "Ethereum";
+  const displayToken = tokenInfo?.token;
 
   const copyAddress = () => {
     if (address) {
@@ -41,7 +83,9 @@ export default function ReceiveModal({ open, onClose }: ReceiveModalProps) {
         PaperProps={{ sx: { borderRadius: 3, m: 2 } }}
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
-          <Typography fontWeight={700}>Receive</Typography>
+          <Typography fontWeight={700}>
+            Receive{displayToken ? ` ${displayToken.symbol}` : ""}
+          </Typography>
           <IconButton size="small" onClick={onClose}>
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -49,11 +93,21 @@ export default function ReceiveModal({ open, onClose }: ReceiveModalProps) {
 
         <DialogContent>
           <Box display="flex" flexDirection="column" alignItems="center" gap={2} pb={2}>
-            {/* QR placeholder — address rendered as visual block */}
+            {/* Token badge */}
+            {displayToken && (
+              <Chip
+                avatar={<Avatar src={displayToken.logoUrl} alt={displayToken.symbol} />}
+                label={`${displayToken.symbol} on ${displayChainName}`}
+                variant="outlined"
+                sx={{ fontWeight: 600 }}
+              />
+            )}
+
+            {/* QR Code */}
             <Box
               sx={{
-                width: 180,
-                height: 180,
+                width: 200,
+                height: 200,
                 borderRadius: 3,
                 bgcolor: "#fff",
                 display: "flex",
@@ -64,16 +118,26 @@ export default function ReceiveModal({ open, onClose }: ReceiveModalProps) {
             >
               <Box
                 component="img"
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${address}`}
+                src={qrUrl}
                 alt="QR Code"
-                sx={{ width: 160, height: 160 }}
+                sx={{ width: 180, height: 180 }}
               />
             </Box>
 
-            <Typography variant="caption" color="text.secondary">
-              {chain?.name || "Ethereum"}
+            {/* Info text */}
+            <Typography variant="caption" color="warning" textAlign="center">
+              {displayToken ? (
+                <>
+                  Scan to send <b>{displayToken.symbol}</b> to this address on <b>{displayChainName}</b>
+                </>
+              ) : (
+                <>
+                  This address receives all tokens on <br /><b>{displayChainName}</b>
+                </>
+              )}
             </Typography>
 
+            {/* Address */}
             <Box
               sx={{
                 width: "100%",

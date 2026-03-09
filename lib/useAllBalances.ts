@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPublicClient, http, formatUnits, type PublicClient } from "viem";
 import { mainnet, arbitrum } from "viem/chains";
-import { TOKENS, ERC20_ABI, ETHEREUM_CHAIN_ID, ARBITRUM_CHAIN_ID } from "./tokens";
+import { TOKENS, ERC20_ABI, ETHEREUM_CHAIN_ID, ARBITRUM_CHAIN_ID, NATIVE_ETH_ADDRESS } from "./tokens";
 
 // Token balance per chain: { [chainId]: { [symbol]: number } }
 export type AllBalances = Record<number, Record<string, number>>;
@@ -30,11 +30,14 @@ async function fetchChainBalances(
   address: `0x${string}`
 ): Promise<{ eth: number; tokens: Record<string, number> }> {
   const client = getClient(chainId);
-  const tokensOnChain = TOKENS.filter((t) => t.addresses[chainId]);
+  // Only fetch ERC20 tokens (skip native ETH placeholder)
+  const erc20Tokens = TOKENS.filter(
+    (t) => t.addresses[chainId] && t.addresses[chainId] !== NATIVE_ETH_ADDRESS
+  );
 
   const [ethBal, ...tokenResults] = await Promise.all([
     client.getBalance({ address }),
-    ...tokensOnChain.map((t) =>
+    ...erc20Tokens.map((t) =>
       client
         .readContract({
           address: t.addresses[chainId],
@@ -46,13 +49,17 @@ async function fetchChainBalances(
     ),
   ]);
 
+  const ethBalance = Number(formatUnits(ethBal, 18));
+
   const tokens: Record<string, number> = {};
-  tokensOnChain.forEach((t, i) => {
+  // Include native ETH in token balances
+  tokens["ETH"] = ethBalance;
+  erc20Tokens.forEach((t, i) => {
     tokens[t.symbol] = Number(formatUnits(tokenResults[i] as bigint, t.decimals));
   });
 
   return {
-    eth: Number(formatUnits(ethBal, 18)),
+    eth: ethBalance,
     tokens,
   };
 }

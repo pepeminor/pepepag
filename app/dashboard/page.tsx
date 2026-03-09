@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Fab,
   Tooltip,
+  Avatar,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -21,16 +22,16 @@ import CallMadeIcon from "@mui/icons-material/CallMade";
 import CallReceivedIcon from "@mui/icons-material/CallReceived";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import QrCodeScannerIcon from "@mui/icons-material/QrCodeScanner";
-import { useWeb3AuthConnect, useWeb3AuthDisconnect, useWeb3AuthUser } from "@web3auth/modal/react";
-import { useAccount, useDisconnect } from "wagmi";
+import { useWeb3AuthConnect, useWeb3AuthDisconnect, useWeb3AuthUser, useSwitchChain } from "@web3auth/modal/react";
+import { useAccount, useDisconnect, useSwitchChain as useWagmiSwitchChain } from "wagmi";
 import { useThemeMode } from "@/lib/ThemeContext";
 import { usePrices, formatUsd } from "@/lib/usePrices";
 import { useAllBalances } from "@/lib/useAllBalances";
-import { ARBITRUM_CHAIN_ID } from "@/lib/tokens";
+import { ARBITRUM_CHAIN_ID, ETHEREUM_CHAIN_ID, type TokenInfo } from "@/lib/tokens";
 import ChainSwitcher from "@/components/wallet/ChainSwitcher";
 import TokenList from "@/components/wallet/TokenList";
 import SendModal, { type SendPrefill } from "@/components/wallet/SendModal";
-import ReceiveModal from "@/components/wallet/ReceiveModal";
+import ReceiveModal, { type ReceiveTokenInfo } from "@/components/wallet/ReceiveModal";
 import QrScannerModal from "@/components/wallet/QrScannerModal";
 
 function shortenAddress(addr: string) {
@@ -45,6 +46,8 @@ export default function DashboardPage() {
   const { userInfo } = useWeb3AuthUser();
   const { address, isConnected: isWagmiConnected, chain } = useAccount();
   const { disconnect: disconnectWagmi } = useDisconnect();
+  const { switchChain: web3AuthSwitch } = useSwitchChain();
+  const { switchChain: wagmiSwitch } = useWagmiSwitchChain();
   const { prices, loading: pricesLoading, canRefresh, fetchPrices } = usePrices();
   const {
     ethBalances,
@@ -58,6 +61,7 @@ export default function DashboardPage() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [sendPrefill, setSendPrefill] = useState<SendPrefill | null>(null);
   const [tokenTotalUsd, setTokenTotalUsd] = useState(0);
+  const [receiveTokenInfo, setReceiveTokenInfo] = useState<ReceiveTokenInfo | null>(null);
 
   const isConnected = isWeb3AuthConnected || isWagmiConnected;
   const chainId = chain?.id || ARBITRUM_CHAIN_ID;
@@ -88,18 +92,71 @@ export default function DashboardPage() {
     refetchBalances();
   };
 
-  const handleScanResult = useCallback((data: { address: string; token?: string; amount?: string }) => {
-    setSendPrefill({
+  // Pending scan data — deferred until chain switch completes
+  const [pendingScan, setPendingScan] = useState<SendPrefill | null>(null);
+
+  const handleScanResult = useCallback(async (data: { address: string; token?: string; amount?: string; chainId?: number }) => {
+    const prefill: SendPrefill = {
       address: data.address,
       token: data.token,
       amount: data.amount,
-    });
+    };
+
+    // Auto switch chain if QR specifies a different chain
+    const needsSwitch = data.chainId && data.chainId !== chain?.id;
+    if (needsSwitch) {
+      const chainMap: Record<number, string> = {
+        [ETHEREUM_CHAIN_ID]: "0x1",
+        [ARBITRUM_CHAIN_ID]: "0xa4b1",
+      };
+      const hexChainId = chainMap[data.chainId!];
+      if (hexChainId) {
+        // Store prefill, open modal after chain switch propagates
+        setPendingScan(prefill);
+        try {
+          await web3AuthSwitch(hexChainId);
+        } catch {
+          try {
+            wagmiSwitch({ chainId: data.chainId! });
+          } catch {
+            // ignore
+          }
+        }
+        return; // Don't open modal yet — useEffect below handles it
+      }
+    }
+
+    // No chain switch needed — open immediately
+    setSendPrefill(prefill);
     setSendOpen(true);
-  }, []);
+  }, [chain?.id, web3AuthSwitch, wagmiSwitch]);
+
+  // Open SendModal after chain switch has propagated to React state
+  useEffect(() => {
+    if (pendingScan && chain?.id) {
+      setSendPrefill(pendingScan);
+      setPendingScan(null);
+      setSendOpen(true);
+    }
+  }, [chain?.id, pendingScan]);
 
   const handleSendClose = () => {
     setSendOpen(false);
     setSendPrefill(null);
+  };
+
+  const handleTokenClick = useCallback((token: TokenInfo) => {
+    setReceiveTokenInfo({
+      token,
+      chainId,
+      chainName: chain?.name || "Ethereum",
+    });
+    setReceiveOpen(true);
+  }, [chainId, chain?.name]);
+
+  const handleReceiveClose = () => {
+    setReceiveOpen(false);
+    setReceiveTokenInfo(null);
   };
 
   if (!isConnected || !address) {
@@ -112,17 +169,16 @@ export default function DashboardPage() {
 
   const displayName = userInfo?.name || userInfo?.email || shortenAddress(address);
 
-  // Current chain ETH balance
+  // Current chain ETH balance (for wallet card display)
   const ethBalance = ethBalances[chainId] || 0;
   const ethUsd = ethBalance * (prices["ETH"] || 0);
 
-  // Total USD for current chain only
-  let chainTokenUsd = 0;
+  // Total USD for current chain (ETH is already included in tokenBalances)
+  let totalUsd = 0;
   const bals = tokenBalances[chainId] || {};
   for (const [symbol, amount] of Object.entries(bals)) {
-    chainTokenUsd += amount * (prices[symbol] || 0);
+    totalUsd += amount * (prices[symbol] || 0);
   }
-  const totalUsd = ethUsd + chainTokenUsd;
 
   return (
     <Box minHeight="100vh" px={2} py={2} pb={12} maxWidth={480} mx="auto">
@@ -177,10 +233,17 @@ export default function DashboardPage() {
             formatUsd(totalUsd)
           )}
         </Typography>
-        <Typography variant="body2" color="text.secondary" mt={0.3}>
-          {`${ethBalance.toFixed(4)} ETH`}
-          {ethUsd > 0 && ` ≈ ${formatUsd(ethUsd)}`}
-        </Typography>
+        <Box display="flex" alignItems="center" gap={0.8} mt={0.3}>
+          <Avatar
+            src="/tokens/eth.png"
+            alt="ETH"
+            sx={{ width: 18, height: 18 }}
+          />
+          <Typography variant="body2" color="text.secondary">
+            {`${ethBalance.toFixed(4)} ETH`}
+            {ethUsd > 0 && ` ≈ ${formatUsd(ethUsd)}`}
+          </Typography>
+        </Box>
 
         {/* Send / Receive buttons */}
         <Stack direction="row" spacing={1.5} mt={2.5}>
@@ -195,7 +258,7 @@ export default function DashboardPage() {
           <Button
             variant="outlined"
             startIcon={<CallReceivedIcon />}
-            onClick={() => setReceiveOpen(true)}
+            onClick={() => { setReceiveTokenInfo(null); setReceiveOpen(true); }}
             sx={{
               flex: 1,
               borderRadius: 2,
@@ -240,6 +303,7 @@ export default function DashboardPage() {
           tokenBalances={tokenBalances}
           loading={balancesLoading}
           onTotalUsd={setTokenTotalUsd}
+          onTokenClick={handleTokenClick}
         />
       </Paper>
 
@@ -283,7 +347,7 @@ export default function DashboardPage() {
 
       {/* Modals */}
       <SendModal open={sendOpen} onClose={handleSendClose} prefill={sendPrefill} />
-      <ReceiveModal open={receiveOpen} onClose={() => setReceiveOpen(false)} />
+      <ReceiveModal open={receiveOpen} onClose={handleReceiveClose} tokenInfo={receiveTokenInfo} />
       <QrScannerModal
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
