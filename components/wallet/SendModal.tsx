@@ -198,7 +198,14 @@ export default function SendModal({ open, onClose, prefill }: SendModalProps) {
         label={`Amount (${selectedToken})`}
         placeholder="0.0"
         value={amount}
-        onChange={(e) => setAmount(e.target.value)}
+        onChange={(e) => {
+          const v = e.target.value;
+          // Only allow digits and one decimal point (e.g. 0.3, 100, 0.000004)
+          if (v === "" || /^\d*\.?\d*$/.test(v)) {
+            setAmount(v);
+          }
+        }}
+        inputMode="decimal"
         error={!isValidAmount}
         helperText={
           isETH && ethBalance
