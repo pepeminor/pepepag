@@ -14,7 +14,7 @@ function getClient(chainId: number): PublicClient {
   if (chainId === ETHEREUM_CHAIN_ID) {
     return createPublicClient({
       chain: mainnet,
-      transport: http(process.env.NEXT_PUBLIC_ETH_RPC_URL || "https://cloudflare-eth.com"),
+      transport: http(process.env.NEXT_PUBLIC_ETH_RPC_URL || "https://1rpc.io/eth"),
       batch: { multicall: true },
     });
   }

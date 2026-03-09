@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import { useSwitchChain } from "@web3auth/modal/react";
-import { useAccount } from "wagmi";
+import { useAccount, useSwitchChain as useWagmiSwitchChain } from "wagmi";
 
 const CHAINS = [
   { chainId: "0x1", numericId: 1, label: "Ethereum", color: "#627EEA", icon: "⟠" },
@@ -20,7 +20,8 @@ const CHAINS = [
 
 export default function ChainSwitcher() {
   const { chain } = useAccount();
-  const { switchChain, loading } = useSwitchChain();
+  const { switchChain: web3AuthSwitch, loading } = useSwitchChain();
+  const { switchChain: wagmiSwitch } = useWagmiSwitchChain();
   const [switching, setSwitching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const pendingChainRef = useRef<string | null>(null);
@@ -29,21 +30,30 @@ export default function ChainSwitcher() {
 
   const handleChange = (e: SelectChangeEvent) => {
     const chainId = e.target.value;
-    if (chainId === currentHex || loading) return;
-    // Store the target chain and close the menu first
+    if (chainId === currentHex || loading || switching) return;
     pendingChainRef.current = chainId;
     setMenuOpen(false);
   };
 
-  // Perform the switch after the menu has fully closed
   const handleMenuClosed = async () => {
     const chainId = pendingChainRef.current;
     if (!chainId) return;
     pendingChainRef.current = null;
 
+    const numericId = CHAINS.find((c) => c.chainId === chainId)?.numericId;
+    if (!numericId) return;
+
     setSwitching(true);
     try {
-      await switchChain(chainId);
+      // Try Web3Auth switch first
+      await web3AuthSwitch(chainId);
+    } catch {
+      // Fallback to wagmi switchChain
+      try {
+        wagmiSwitch({ chainId: numericId });
+      } catch {
+        // ignore
+      }
     } finally {
       setSwitching(false);
     }
